@@ -351,3 +351,34 @@ class GravPoint implements java.io.Serializable {
     }
 }
 
+class Point implements java.io.Serializable {
+
+	private static final long serialVersionUID = 1L;
+
+	private double x = 0.0;
+	private double y = 0.0;
+
+	public Point(double x, double y) {
+		this.x = x;
+		this.y = y;
+	}
+
+	public double getX() {
+		return x;
+	}
+
+	public double getY() {
+		return y;
+	}
+}
+
+class RobotColors implements java.io.Serializable {
+
+	private static final long serialVersionUID = 1L;
+
+	public Color bodyColor;
+	public Color gunColor;
+	public Color radarColor;
+	public Color scanColor;
+	public Color bulletColor;
+}
