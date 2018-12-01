@@ -39,6 +39,7 @@ public class PblRobot extends TeamRobot {
 	
 		targets = new Hashtable();
 		target = new Enemy();
+		target.energy = -1;
 		target.distance = 100000;						//initialise the distance so that we can select a target
 		setColors(Color.red,Color.blue,Color.green);	//sets the colours of the robot
 		//the next two lines mean that the turns of the robot, gun and radar are independant
@@ -49,7 +50,7 @@ public class PblRobot extends TeamRobot {
 		// Prepare RobotColors object
 		RobotColors c = new RobotColors();
 
-		c.bodyColor = Color.green;
+		c.bodyColor = Color.blue;
 		c.gunColor = Color.red;
 		c.radarColor = Color.red;
 		c.scanColor = Color.yellow;
@@ -72,7 +73,7 @@ public class PblRobot extends TeamRobot {
 			doScanner();					//Oscillate the scanner over the bot
 			doGun();
 			out.println(target.distance);	//move the gun to predict where the enemy will be
-			//fire(firePower);
+			fire(firePower);
 			execute();						//execute all commands
 		}
 	}
@@ -81,8 +82,6 @@ public class PblRobot extends TeamRobot {
 	 * onScannedRobot:  What to do when you see another robot
 	 */
 	public void onScannedRobot(ScannedRobotEvent e) {
-		
-		
 		Enemy en;
 		if (targets.containsKey(e.getName())) {
 			en = (Enemy)targets.get(e.getName());
@@ -109,8 +108,25 @@ public class PblRobot extends TeamRobot {
 		en.speed = e.getVelocity();
 		en.distance = e.getDistance();	
 		en.live = true;
-		if (en.teammate = false && ((en.distance < target.distance)||(target.live == false))) {
+		en.energy = e.getEnergy();
+		if (en.teammate == false && 
+			((en.energy>target.energy)||(en.energy<20 && (en.energy<target.energy))) &&
+			((en.distance < target.distance)||(target.live == false))) {
 			target = en;
+		}
+		try {
+			 //Send enemy object to our entire team
+			broadcastMessage(en);
+		} catch (IOException ignored) {}
+	}
+	
+	public void generateEnemy(Enemy en){
+		Enemy newEn;
+		if (targets.containsKey(en.name)) {
+			newEn = (Enemy)targets.get(en.name);
+		} else {
+			newEn = new Enemy();
+			targets.put(en.name,newEn);
 		}
 	}
 
@@ -144,6 +160,9 @@ public class PblRobot extends TeamRobot {
 			if (en.live) {
 				p = new GravPoint(en.x,en.y, -1000);
 		        force = p.power/Math.pow(getRange(getX(),getY(),p.x,p.y),2);
+				if(en.name == target.name){
+					force = -force*10;
+				}
 		        //Find the bearing from the point to us
 		        ang = normaliseBearing(Math.PI/2 - Math.atan2(getY() - p.y, getX() - p.x)); 
 		        //Add the components of this force to the total force in their respective directions
@@ -275,26 +294,14 @@ public class PblRobot extends TeamRobot {
 		return 0;
 	}
 
-
-	
-	
 	/**
 	 * onMessageReceived:  What to do when our leader sends a message
 	 */
 	public void onMessageReceived(MessageEvent e) {
 		// Fire at a point
-		if (e.getMessage() instanceof Point) {
-			Point p = (Point) e.getMessage();
-			// Calculate x and y to target
-			double dx = p.getX() - this.getX();
-			double dy = p.getY() - this.getY();
-			// Calculate angle to target
-			double theta = Math.toDegrees(Math.atan2(dx, dy));
-
-			// Turn gun to target
-			turnGunRight(normalRelativeAngleDegrees(theta - getGunHeading()));
-			// Fire hard!
-			fire(3);
+		if (e.getMessage() instanceof Enemy) {
+			Enemy en = (Enemy)e.getMessage();
+			generateEnemy(en);
 		} // Set our colors
 		else if (e.getMessage() instanceof RobotColors) {
 			RobotColors c = (RobotColors) e.getMessage();
@@ -315,13 +322,13 @@ public class PblRobot extends TeamRobot {
 }
 
 
-class Enemy {
+class Enemy implements java.io.Serializable {
 	/*
 	 * ok, we should really be using accessors and mutators here,
 	 * (i.e getName() and setName()) but life's too short.
 	 */
 	String name;
-	public double bearing,heading,speed,x,y,distance,changehead;
+	public double bearing,heading,speed,x,y,distance,changehead,energy;
 	public long ctime; 		//game time that the scan was produced
 	public boolean live; 	//is the enemy alive?
 	public boolean teammate = false;
@@ -335,7 +342,7 @@ class Enemy {
 }
 
 /**Holds the x, y, and strength info of a gravity point**/
-class GravPoint {
+class GravPoint implements java.io.Serializable {
     public double x,y,power;
     public GravPoint(double pX,double pY,double pPower) {
         x = pX;
@@ -344,34 +351,3 @@ class GravPoint {
     }
 }
 
-class Point implements java.io.Serializable {
-
-	private static final long serialVersionUID = 1L;
-
-	private double x = 0.0;
-	private double y = 0.0;
-
-	public Point(double x, double y) {
-		this.x = x;
-		this.y = y;
-	}
-
-	public double getX() {
-		return x;
-	}
-
-	public double getY() {
-		return y;
-	}
-}
-
-class RobotColors implements java.io.Serializable {
-
-	private static final long serialVersionUID = 1L;
-
-	public Color bodyColor;
-	public Color gunColor;
-	public Color radarColor;
-	public Color scanColor;
-	public Color bulletColor;
-}
