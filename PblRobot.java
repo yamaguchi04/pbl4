@@ -1,4 +1,5 @@
-package pbl;
+package group04;
+
 import robocode.*;
 //import java.awt.Color;
 
@@ -22,7 +23,7 @@ import java.awt.geom.*;
 import java.util.*;
 
 
-public class PblRobot extends TeamRobot {
+public class Ex extends TeamRobot {
 
 	
 	/**
@@ -32,9 +33,17 @@ public class PblRobot extends TeamRobot {
 	Enemy target;					//our current enemy
 	final double PI = Math.PI;		//just a constant
 	int direction = 1;				//direction we are heading... 1 = forward, -1 = backwards
+	int enteam = 3;					//enemy team's living robot
 	double firePower;				//the power of the shot we will be using
 	double midpointstrength = 0;	//The strength of the gravity point in the middle of the field
 	int midpointcount = 0;			//Number of turns since that strength was changed.
+	boolean walls=true;          // only walls
+	int straight = 0;
+	double pastx,pasty;
+	boolean first = true;
+	boolean second = false;
+	boolean leader = false;
+	Enemy firstTarget;
 	public void run() {
 	
 		targets = new Hashtable();
@@ -51,10 +60,10 @@ public class PblRobot extends TeamRobot {
 		RobotColors c = new RobotColors();
 
 		c.bodyColor = Color.blue;
-		c.gunColor = Color.red;
-		c.radarColor = Color.red;
-		c.scanColor = Color.yellow;
-		c.bulletColor = Color.yellow;
+		c.gunColor = Color.pink;
+		c.radarColor = Color.pink;
+		c.scanColor = Color.pink;
+		c.bulletColor = Color.pink;
 
 		// Set the color of this robot containing the RobotColors
 		setBodyColor(c.bodyColor);
@@ -62,12 +71,11 @@ public class PblRobot extends TeamRobot {
 		setRadarColor(c.radarColor);
 		setScanColor(c.scanColor);
 		setBulletColor(c.bulletColor);
-		try {
-			// Send RobotColors object to our entire team
-			broadcastMessage(c);
-		} catch (IOException ignored) {}
+		if(getEnergy() > 150){
+			leader = true;
+		}
 		// Normal behavior
-		while (true) {
+		while (walls) {
 			antiGravMove();					//Move the bot
 			doFirePower();					//select the fire power to use
 			doScanner();					//Oscillate the scanner over the bot
@@ -76,8 +84,35 @@ public class PblRobot extends TeamRobot {
 			fire(firePower);
 			execute();						//execute all commands
 		}
+		while(true){
+			if(target.distance < 100 || (target.distance < 200 && straight > 5)){
+				fire(2);
+				if(getEnergy() <2){
+				fire(getEnergy());
+				} 
+			if(straight > 5){
+			straight = 0;
+			}
+			}
+			if(target.distance > 40 || target.live == false){
+			antiGravMove();					//Move the bot		
+			}	
+			doScanner();					//Oscillate the scanner over the bot
+			doGun();
+			execute();						//execute all commands
+			if(Math.abs(pastx - getX()) < 80 || Math.abs(pasty - getY()) < 80 ){
+			straight++;
+			}
+			pastx = getX();
+			pasty = getY();
+		}
 	}
 
+	/**
+	 * setBullet:  set bullet into gravity point 
+	 */
+
+		
 	/**
 	 * onScannedRobot:  What to do when you see another robot
 	 */
@@ -90,9 +125,8 @@ public class PblRobot extends TeamRobot {
 			targets.put(e.getName(),en);
 		}
 		// Don't fire on teammates
-		if (isTeammate(e.getName())) {
-			en.teammate = true;
-		}
+		en.teammate = isTeammate(e.getName());
+		en.dummy = dummyChecker(e.getName());
 		//the next line gets the absolute bearing to the point where the bot is
 		double absbearing_rad = (getHeadingRadians()+e.getBearingRadians())%(2*PI);
 		//this section sets all the information about our target
@@ -109,15 +143,35 @@ public class PblRobot extends TeamRobot {
 		en.distance = e.getDistance();	
 		en.live = true;
 		en.energy = e.getEnergy();
-		if (en.teammate == false && 
-			((en.energy>target.energy)||(en.energy<20 && (en.energy<target.energy))) &&
-			((en.distance < target.distance)||(target.live == false))) {
-			target = en;
+		if(first == false){	
+			if (walls && en.teammate == false 
+				&&  ((target.live == false) || target.dummy == true ||(en.dummy == false &&
+				((en.energy>target.energy)||(en.energy<20 && (en.energy<target.energy))) &&
+				((en.distance < target.distance))))) {
+				target = en;
+			}
+			if(walls==false && en.teammate == false 
+				&& (target.live == false || target.distance >en.distance+200)){
+				target = en;
+			}
+			if(walls){
+				try {
+					 //Send enemy object to our entire team
+					broadcastMessage(en);
+				} catch (IOException ignored) {}
+			}
 		}
-		try {
-			 //Send enemy object to our entire team
-			broadcastMessage(en);
-		} catch (IOException ignored) {}
+		if(first && en.energy > 150 && en.teammate == false && en.dummy == false && second == false){
+			target = en;
+			second = true;
+//			if(!leader){
+	//			try {
+					 //Send enemy object to our entire team
+		//			broadcastMessage(en);
+			//	} catch (IOException ignored) {}
+			//}
+		}
+			
 	}
 	
 	public void generateEnemy(Enemy en){
@@ -134,9 +188,8 @@ public class PblRobot extends TeamRobot {
 	 * onHitByBullet:  Turn perpendicular to bullet path
 	 */
 	public void onHitByBullet(HitByBulletEvent e) {
-		turnLeft(90 - e.getBearing());
+		//turnLeft(90 - e.getBearing());
 	}
-	
 
 	void doFirePower() {
 		firePower = 400/target.distance;//selects a bullet power based on our distance away from the target
@@ -145,7 +198,23 @@ public class PblRobot extends TeamRobot {
 		}
 	}
 	
+	boolean dummyChecker(String s){
+		System.out.println(s);
+		if	(s.matches(".*Walls.*")){
+			return true;
+		}
+		return false;
+	}
 	
+	public boolean isMatch(String str1, String str2) {
+	    if(str1.matches(".*" + str2 + ".*")) {
+	        return true;
+	    }
+	    else {
+	        return false;
+	    }
+	}
+
 	void antiGravMove() {
    		double xforce = 0;
 	    double yforce = 0;
@@ -161,16 +230,20 @@ public class PblRobot extends TeamRobot {
 				p = new GravPoint(en.x,en.y, -1000);
 		        force = p.power/Math.pow(getRange(getX(),getY(),p.x,p.y),2);
 				if(en.name == target.name){
-					force = -force*10;
+					force = -force*100;
 				}
 		        //Find the bearing from the point to us
 		        ang = normaliseBearing(Math.PI/2 - Math.atan2(getY() - p.y, getX() - p.x)); 
 		        //Add the components of this force to the total force in their respective directions
+				if(en.teammate == false){
 		        xforce += Math.sin(ang) * force;
 		        yforce += Math.cos(ang) * force;
+				}else if(en.distance <100){
+		        xforce += Math.sin(ang) * force*1000;
+		        yforce += Math.cos(ang) * force*1000;
+				}
 			}
 	    }
-	    
 		/**The next section adds a middle point with a random (positive or negative) strength.
 		The strength changes every 5 turns, and goes between -1000 and 1000.  This gives a better
 		overall movement.**/
@@ -182,6 +255,9 @@ public class PblRobot extends TeamRobot {
 		p = new GravPoint(getBattleFieldWidth()/2, getBattleFieldHeight()/2, midpointstrength);
 		force = p.power/Math.pow(getRange(getX(),getY(),p.x,p.y),1.5);
 	    ang = normaliseBearing(Math.PI/2 - Math.atan2(getY() - p.y, getX() - p.x)); 
+		if(walls == false){
+			force = 0;
+		}
 	    xforce += Math.sin(ang) * force;
 	    yforce += Math.cos(ang) * force;
 	   
@@ -299,28 +375,54 @@ public class PblRobot extends TeamRobot {
 	 */
 	public void onMessageReceived(MessageEvent e) {
 		// Fire at a point
+		int n = 0;
 		if (e.getMessage() instanceof Enemy) {
 			Enemy en = (Enemy)e.getMessage();
 			generateEnemy(en);
+//			if(leader && first){
+	//			if(n==0){
+		//			firstTarget = en;
+			//		n++; 
+				//}else if(n==1){
+//					if(firstTarget.name.equals(en)){
+	//					target = firstTarget;
+		//			}else{
+			//			firstTarget=target;
+				//		firstTarget.first = true;
+					//	try {
+							 //Send enemy object to our entire team
+//							broadcastMessage(firstTarget);
+	//					} catch (IOException ignored) {}
+		//			}
+			//	}
+//			}else if(!leader && first && en.first == true){
+	//			target = en;
+		//	}
 		} // Set our colors
 		else if (e.getMessage() instanceof RobotColors) {
-			RobotColors c = (RobotColors) e.getMessage();
-
-			setBodyColor(c.bodyColor);
-			setGunColor(c.gunColor);
-			setRadarColor(c.radarColor);
-			setScanColor(c.scanColor);
-			setBulletColor(c.bulletColor);
 		}
 	}
 	
 	
 	public void onRobotDeath(RobotDeathEvent e) {
 		Enemy en = (Enemy)targets.get(e.getName());
-		en.live = false;		
+		en.live = false;	
+		if(en.dummy == false && en.teammate == false){
+			enteam--;
+		}
+		if(enteam == 0){
+			walls = false;
+		}
+		if(first && target.live == false){
+			first = false;
+		}
 	}	
 }
 
+class firstTargetEnemy implements java.io.Serializable {
+	Enemy en;
+	
+}
 
 class Enemy implements java.io.Serializable {
 	/*
@@ -332,6 +434,8 @@ class Enemy implements java.io.Serializable {
 	public long ctime; 		//game time that the scan was produced
 	public boolean live; 	//is the enemy alive?
 	public boolean teammate = false;
+	public boolean dummy = false;
+	public boolean first = false;
 	public Point2D.Double guessPosition(long when) {
 		double diff = when - ctime;
 		double newY = y + Math.cos(heading) * speed * diff;
@@ -351,34 +455,4 @@ class GravPoint implements java.io.Serializable {
     }
 }
 
-class Point implements java.io.Serializable {
 
-	private static final long serialVersionUID = 1L;
-
-	private double x = 0.0;
-	private double y = 0.0;
-
-	public Point(double x, double y) {
-		this.x = x;
-		this.y = y;
-	}
-
-	public double getX() {
-		return x;
-	}
-
-	public double getY() {
-		return y;
-	}
-}
-
-class RobotColors implements java.io.Serializable {
-
-	private static final long serialVersionUID = 1L;
-
-	public Color bodyColor;
-	public Color gunColor;
-	public Color radarColor;
-	public Color scanColor;
-	public Color bulletColor;
-}
